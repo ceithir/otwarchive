@@ -18,6 +18,16 @@ class TagIndexer < Indexer
             keyword: {
               type: "keyword",
               normalizer: "keyword_lowercase"
+            },
+            suggest: {
+              type: "completion",
+              contexts: [
+                {
+                  name: "typecan",
+                  type: "category",
+                  path: "typecan"
+                }
+              ]
             }
           }
         },
@@ -67,7 +77,8 @@ class TagIndexer < Indexer
     ).merge(
       has_posted_works: object.has_posted_works?,
       tag_type: object.type,
-      uses: object.taggings_count_cache
+      uses: object.taggings_count_cache,
+      typecan: "#{object.type}-#{object.canonical.to_s}"
     ).merge(parent_data(object))
   end
 

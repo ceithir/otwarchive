@@ -98,16 +98,29 @@ class AutocompleteController < ApplicationController
     match = []
     match = [one_tag.first.name] if one_tag.count == 1
 
-    word_list = search_param.split
-    last_word = word_list.pop
-    search_list = word_list.map { |w| { term: { name: { value: w, case_insensitive: true } } } } + [{ prefix: { name: { value: last_word, case_insensitive: true } } }]
     begin
-      # Size is chosen so we get enough search results from each shard.
       search_results = $elasticsearch.search(
         index: "#{ArchiveConfig.ELASTICSEARCH_PREFIX}_#{Rails.env}_tags",
-        body: { size: "100", query: { bool: { filter: [{ match: { tag_type: params[:type].capitalize } }, { match: { canonical: false } }], must: search_list } } }
+        body: {
+          # Size is chosen so we get enough search results from each shard.
+          # Might not be relevant or the right syntax anymore
+          size: 100,
+          # Only return useful field
+          _source: "name",
+          suggest: {
+            tag_suggestion: {
+              prefix: search_param,
+              completion: {
+                field: "name.suggest",
+                skip_duplicates: true,
+                # https://github.com/elastic/elasticsearch/pull/26407#issuecomment-326771608
+                contexts: { typecan: "#{params[:type].capitalize}-false" }
+              }
+            }
+          }
+        }
       )
-      render_output(match + search_results["hits"]["hits"].first(10).map { |t| t["_source"]["name"] })
+      render_output(match + search_results["suggest"]["tag_suggestion"][0]["options"].first(10).map { |t| t["_source"]["name"] })
     rescue Elasticsearch::Transport::Transport::Errors::BadRequest
       render_output(match)
     end
